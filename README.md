@@ -1,43 +1,70 @@
 # tvOS Browser
 
-**The whole web, on the biggest screen in your home.**
+**Watch anything. Browse everything. Skip the ads.**
 
-Apple TV ships without a web browser. tvOS Browser fills that gap: a fast, modern WebKit browser
-built for the Siri Remote, with tabs, a precise on-screen cursor, a built-in ad blocker and
-full-screen video that plays in Apple's own player.
+Apple TV ships without a web browser, and on tvOS web pages can't even take a video full
+screen. tvOS Browser is built around fixing exactly that: it plays web video in Apple's own
+full-screen player, renders modern sites the way Safari does, and blocks ads and trackers before
+they load, all driven by the Siri Remote.
 
 ![Platform: tvOS 26+](https://img.shields.io/badge/platform-tvOS%2026%2B-black)
 ![Xcode 27](https://img.shields.io/badge/Xcode-27-blue)
 ![License: MIT (see LICENSE)](https://img.shields.io/badge/license-MIT%20%28see%20LICENSE%29-green)
 
-![tvOS Browser on Apple TV](screen01.png)
+![A web video playing full screen in Apple's native player, with on-screen skip and play/pause buttons](screenshots/video-player.jpg)
+
+## Plays the videos other browsers can't
+
+On tvOS, WebKit can't show web video full screen, so in other browsers a video stays stuck in a
+small box on the page, if it plays at all. tvOS Browser picks up the stream the page's player is
+loading (HLS or MP4) and hands it to **Apple's native video player**, the same one Apple's own
+apps use.
+
+- **One press to full screen.** Hit the full-screen button in a site's video player and the
+  video opens natively, picking up exactly where you were.
+- **Proper controls.** Swipe to scrub, click to pause, skip 10 seconds with a press, or use the
+  on-screen **back 10 s / play-pause / forward 10 s** buttons.
+- **Your choice of quality.** When a site offers several qualities, you pick the one you want.
+- **Smooth streaming.** HLS and MP4 streams play with AVPlayer's own buffering, so long films
+  don't stutter or eat memory.
+
+## Works with the modern web
+
+![apple.com rendered by tvOS Browser](screenshots/compatibility.jpg)
+
+- **Safari-grade rendering.** Pages are drawn by WebKit, the engine behind Safari, so modern
+  sites look and behave the way they should.
+- **Clicks that land where you point.** Every click is delivered exactly like a real mouse
+  click, so progress bars, sliders and menus in web apps respond correctly.
+- **Built for today's tvOS.** Updated for tvOS 26 and 27, with the Liquid Glass look and the
+  stability fixes newer tvOS versions require.
+- **Desktop or mobile.** Switch between desktop and mobile versions of a site, scale pages to
+  fit the TV and adjust the font size.
+
+## Blocks ads and trackers
+
+![87 of 132 ad and tracker tests blocked on adblock.turtlecute.org](screenshots/ad-blocking.jpg)
+
+<p align="center"><em>87 of 132 ad and tracker tests blocked on adblock.turtlecute.org, out of the box.</em></p>
+
+Around **150,000 rules** from the same filter lists that power uBlock Origin (EasyList,
+EasyPrivacy, uBlock filters and RU AdList) stop ads and trackers before they even load, on every
+tab. Pages load faster, look cleaner and track you less. If a site misbehaves, switch blocking
+off from the side menu in one click.
+
+## And everything you'd expect from a browser
 
 <p align="center">
-  <img src="screen02.png" width="49%" alt="Tab switcher" />
-  <img src="screen03.png" width="49%" alt="Side menu" />
+  <img src="screenshots/tabs.jpg" width="49%" alt="Tab overview" />
+  <img src="screenshots/side-menu.jpg" width="49%" alt="Side menu" />
 </p>
 
-## Why you'll love it
-
-- **Real Safari-grade rendering.** Pages are drawn by WebKit, the engine behind Safari, so
-  modern sites look and behave the way they should.
-- **A cursor that feels right.** Glide across the page with the touch surface. Pointer
-  acceleration makes slow movements precise enough for the smallest links, while quick swipes
-  still cross the screen in a flash. Double-press to switch to scroll mode and flick through
-  long pages.
-- **Video, the Apple TV way.** Press a site's full-screen button and the video jumps into Apple's
-  native player, picking up exactly where you were, with skip and play/pause buttons on screen.
-  It even handles modern streaming players (HLS and Media Source) that other tvOS browsers can't
-  play, and lets you choose the quality when a site offers several.
-- **Built-in ad and tracker blocking.** Around 150,000 rules from the same filter lists that power
-  uBlock Origin (EasyList, EasyPrivacy, uBlock filters and RU AdList) block ads and trackers
-  before they load, on every tab. You can switch it off from the menu if a site misbehaves.
-- **Tabs, favorites and history.** Open several sites at once, flip between them in a visual tab
+- **A cursor that feels right.** Pointer acceleration makes slow movements precise enough for
+  the smallest links, while quick swipes still cross the screen in a flash. Double-click to
+  switch to scroll mode and flick through long pages.
+- **Tabs, favorites and history.** Keep several sites open, flip between them in a visual tab
   overview, and keep your favorite pages one click away.
-- **Liquid Glass design.** The top bar and side menu use the tvOS 26 Liquid Glass look, so the
-  browser feels at home next to Apple's own apps.
-- **Desktop or mobile.** Switch between desktop and mobile versions of sites, adjust page scaling
-  and font size, and set your own home page.
+- **Liquid Glass design.** The top bar and side menu fit right in next to Apple's own apps.
 
 > [!IMPORTANT]
 > tvOS Browser uses private Apple APIs (tvOS has no public web view), so it can't be distributed
@@ -83,7 +110,7 @@ In Xcode, open **Settings → Accounts**, click **+**, and sign in with your App
 4. Change the **Bundle Identifier** to something unique to you, for example
    `com.yourname.tvbrowser`. Every Apple ID needs its own.
 
-![Signing & Capabilities](readme_instruction_02.png)
+![Signing & Capabilities](screenshots/xcode-signing.png)
 
 ### 5. Build and run
 
@@ -167,7 +194,9 @@ automatically (this needs Xcode's command-line tools and an internet connection)
 - **Your Apple TV doesn't show up in Xcode.** Make sure both devices are on the same network and
   the Apple TV is showing the **Remote App and Devices** screen while you pair.
 - **"Native Video Unavailable".** The page didn't expose a video stream the native player can open.
-  Start the video in the page first, then press the player's full-screen button.
+  Start the video in the page first, then press the player's full-screen button. A few players
+  only work through Media Source Extensions, which tvOS's WebKit doesn't provide; if such a
+  player has no fallback to plain HLS or MP4, its video can't be played.
 - **A site looks broken.** Try turning off the ad blocker for a moment (**Side Menu → Content
   Blocking**), or switch between desktop and mobile mode.
 

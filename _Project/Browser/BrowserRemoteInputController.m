@@ -58,6 +58,7 @@ static NSString *BrowserPressPhaseString(UIPressPhase phase) {
 @property (nonatomic) CFTimeInterval lastDirectSelectPressTimestamp;
 @property (nonatomic) CFTimeInterval lastSelectPressTimestamp;
 @property (nonatomic) BOOL awaitingSecondSelectPress;
+@property (nonatomic) BOOL hoverStateUpdateScheduled;
 
 @end
 
@@ -428,23 +429,42 @@ static NSString *BrowserPressPhaseString(UIPressPhase phase) {
             self.lastTouchLocation = location;
         }
 
-        self.cursorView.image = BrowserDefaultCursor();
         if ([self.host browserRemoteInputControllerTabOverviewVisible]) {
-            if ([self.host browserRemoteInputControllerTabOverviewContainsPoint:self.cursorView.frame.origin]) {
-                self.cursorView.image = BrowserPointerCursor();
-            }
+            BOOL containsPoint = [self.host browserRemoteInputControllerTabOverviewContainsPoint:self.cursorView.frame.origin];
+            self.cursorView.image = containsPoint ? BrowserPointerCursor() : BrowserDefaultCursor();
             break;
         }
         if (self.cursorModeEnabled) {
-            NSString *containsLink = [self.host browserRemoteInputControllerHoverStateAtCursorPoint:self.cursorView.frame.origin];
-            if ([containsLink isEqualToString:@"true"]) {
-                self.cursorView.image = BrowserPointerCursor();
-            }
+            [self scheduleHoverStateUpdate];
         }
         break;
     }
 
     return YES;
+}
+
+// The hover check evaluates page JavaScript synchronously, which pumps the run loop. Doing that
+// while UIKit is still dispatching the touch lets the next touch re-enter -[UIApplication sendEvent:],
+// which tvOS 27 traps on, so it runs right after the current event instead.
+- (void)scheduleHoverStateUpdate {
+    if (self.hoverStateUpdateScheduled) {
+        return;
+    }
+    self.hoverStateUpdateScheduled = YES;
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        CGPoint cursorOrigin = self.cursorView.frame.origin;
+        if (self.cursorModeEnabled && ![self.host browserRemoteInputControllerTabOverviewVisible]) {
+            NSString *containsLink = [self.host browserRemoteInputControllerHoverStateAtCursorPoint:cursorOrigin];
+            self.cursorView.image = [containsLink isEqualToString:@"true"] ? BrowserPointerCursor() : BrowserDefaultCursor();
+        }
+        self.hoverStateUpdateScheduled = NO;
+
+        // The cursor may have moved while the page was being queried.
+        if (!CGPointEqualToPoint(cursorOrigin, self.cursorView.frame.origin)) {
+            [self scheduleHoverStateUpdate];
+        }
+    });
 }
 
 - (void)handleTouchesEnded {

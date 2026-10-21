@@ -192,24 +192,32 @@ static UIColor *BrowserPageActionTextColor(void) {
                                                                     body:@"var target = editableElement || interactiveElement || resolvedElement;"
                                                                          "if (!target) { return 'false'; }"
                                                                          "try { if (target.focus) { target.focus(); } } catch (error) {}"
-                                                                         "function dispatchPointerLikeEvent(type, constructorName) {"
+                                                                         // Events go to the deepest element under the cursor and bubble up from there, like a real
+                                                                         // mouse; listeners on a child (e.g. a player's progress bar) never see events sent to an ancestor.
+                                                                         "var eventTarget = resolvedElement || target;"
+                                                                         "function dispatchPointerLikeEvent(type, constructorName, buttons) {"
                                                                              "try {"
                                                                                  "var Constructor = window[constructorName];"
                                                                                  "if (Constructor) {"
-                                                                                     "var event = new Constructor(type, { bubbles: true, cancelable: true, composed: true, view: window, clientX: x, clientY: y, screenX: x, screenY: y, button: 0, buttons: 1, pointerType: 'mouse' });"
-                                                                                     "return target.dispatchEvent(event);"
+                                                                                     "var event = new Constructor(type, { bubbles: true, cancelable: true, composed: true, view: window, detail: 1, clientX: x, clientY: y, screenX: x, screenY: y, button: 0, buttons: buttons, pointerType: 'mouse', isPrimary: true });"
+                                                                                     "return eventTarget.dispatchEvent(event);"
                                                                                  "}"
                                                                              "} catch (error) {}"
                                                                              "var mouseEvent = document.createEvent('MouseEvents');"
                                                                              "mouseEvent.initMouseEvent(type, true, true, window, 1, x, y, x, y, false, false, false, false, 0, null);"
-                                                                             "return target.dispatchEvent(mouseEvent);"
+                                                                             "return eventTarget.dispatchEvent(mouseEvent);"
                                                                          "}"
-                                                                         "dispatchPointerLikeEvent('pointerdown', 'PointerEvent');"
-                                                                         "dispatchPointerLikeEvent('mousedown', 'MouseEvent');"
-                                                                         "dispatchPointerLikeEvent('pointerup', 'PointerEvent');"
-                                                                         "dispatchPointerLikeEvent('mouseup', 'MouseEvent');"
-                                                                         "if (typeof target.click === 'function') { target.click(); }"
-                                                                         "else { dispatchPointerLikeEvent('click', 'MouseEvent'); }"
+                                                                         // A real mouse hovers and moves before pressing; players use the move to track the seek position.
+                                                                         "dispatchPointerLikeEvent('pointerover', 'PointerEvent', 0);"
+                                                                         "dispatchPointerLikeEvent('mouseover', 'MouseEvent', 0);"
+                                                                         "dispatchPointerLikeEvent('pointermove', 'PointerEvent', 0);"
+                                                                         "dispatchPointerLikeEvent('mousemove', 'MouseEvent', 0);"
+                                                                         "dispatchPointerLikeEvent('pointerdown', 'PointerEvent', 1);"
+                                                                         "dispatchPointerLikeEvent('mousedown', 'MouseEvent', 1);"
+                                                                         "dispatchPointerLikeEvent('pointerup', 'PointerEvent', 0);"
+                                                                         "dispatchPointerLikeEvent('mouseup', 'MouseEvent', 0);"
+                                                                         // element.click() reports position (0, 0); a positioned click still triggers links and buttons.
+                                                                         "dispatchPointerLikeEvent('click', 'MouseEvent', 0);"
                                                                          "return 'true';"];
     fieldType = fieldType.lowercaseString;
     if ([fieldType isEqualToString:@"date"] ||

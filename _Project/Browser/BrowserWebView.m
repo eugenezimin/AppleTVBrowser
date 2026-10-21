@@ -1,5 +1,6 @@
 #import "BrowserWebView.h"
 
+#import "BrowserContentBlocker.h"
 
 #import <dlfcn.h>
 #import <objc/message.h>
@@ -727,6 +728,7 @@ static void BrowserInstallUserScript(id configuration, NSString *source, BOOL fo
     BrowserInstallUserScript(configuration, BrowserYouTubeRequestCaptureScript(), NO);
     BrowserInstallUserScript(configuration, BrowserMediaStreamCaptureScript(), NO);
     [self installMediaMessageHandlerOnConfiguration:configuration];
+    [[BrowserContentBlocker sharedBlocker] registerUserContentController:BrowserUserContentControllerForConfiguration(configuration)];
 
     id webViewObject = ((id (*)(id, SEL))objc_msgSend)((id)webViewClass, @selector(alloc));
     SEL initializer = NSSelectorFromString(@"initWithFrame:configuration:");

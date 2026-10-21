@@ -41,6 +41,8 @@
 		A1B49A8F2D700020001D58A1 /* BrowserTabOverviewController.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B49A8E2D700020001D58A1 /* BrowserTabOverviewController.m */; };
 		A1B49A922D6E3000001D58A1 /* BrowserRezkaExtractor.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B49A912D6E3000001D58A1 /* BrowserRezkaExtractor.m */; };
 		A1B49A952D6E3000001D58A1 /* SceneDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B49A942D6E3000001D58A1 /* SceneDelegate.m */; };
+		A1B49A982D6E3000001D58A1 /* BrowserContentBlocker.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B49A972D6E3000001D58A1 /* BrowserContentBlocker.m */; };
+		A1B49A9A2D6E3000001D58A1 /* ContentBlockers in Resources */ = {isa = PBXBuildFile; fileRef = A1B49A992D6E3000001D58A1 /* ContentBlockers */; };
 		A1B49A922D700030001D58A1 /* BrowserPageActionCoordinator.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B49A912D700030001D58A1 /* BrowserPageActionCoordinator.m */; };
 		A1B49A952D700040001D58A1 /* BrowserRemoteInputController.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B49A942D700040001D58A1 /* BrowserRemoteInputController.m */; };
 		B002B8671BAE420500C744AF /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = B002B8661BAE420500C744AF /* main.m */; };
@@ -103,6 +105,9 @@
 		A1B49A912D6E3000001D58A1 /* BrowserRezkaExtractor.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BrowserRezkaExtractor.m; sourceTree = "<group>"; };
 		A1B49A932D6E3000001D58A1 /* SceneDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SceneDelegate.h; sourceTree = "<group>"; };
 		A1B49A942D6E3000001D58A1 /* SceneDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SceneDelegate.m; sourceTree = "<group>"; };
+		A1B49A962D6E3000001D58A1 /* BrowserContentBlocker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BrowserContentBlocker.h; sourceTree = "<group>"; };
+		A1B49A972D6E3000001D58A1 /* BrowserContentBlocker.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BrowserContentBlocker.m; sourceTree = "<group>"; };
+		A1B49A992D6E3000001D58A1 /* ContentBlockers */ = {isa = PBXFileReference; lastKnownFileType = folder; path = ContentBlockers; sourceTree = "<group>"; };
 		A1B49A912D700030001D58A1 /* BrowserPageActionCoordinator.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BrowserPageActionCoordinator.m; sourceTree = "<group>"; };
 		A1B49A932D700040001D58A1 /* BrowserRemoteInputController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BrowserRemoteInputController.h; sourceTree = "<group>"; };
 		A1B49A942D700040001D58A1 /* BrowserRemoteInputController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BrowserRemoteInputController.m; sourceTree = "<group>"; };
@@ -262,6 +267,9 @@
 				A1B49A912D6E3000001D58A1 /* BrowserRezkaExtractor.m */,
 				A1B49A932D6E3000001D58A1 /* SceneDelegate.h */,
 				A1B49A942D6E3000001D58A1 /* SceneDelegate.m */,
+				A1B49A962D6E3000001D58A1 /* BrowserContentBlocker.h */,
+				A1B49A972D6E3000001D58A1 /* BrowserContentBlocker.m */,
+				A1B49A992D6E3000001D58A1 /* ContentBlockers */,
 			);
 			name = Video;
 			sourceTree = "<group>";
@@ -387,6 +395,7 @@
 				3A2A7C2221E790000083CB13 /* multi-tab.png in Resources */,
 				3A2A7C2421E790000083CB13 /* plus.png in Resources */,
 				B002B8721BAE420500C744AF /* Assets.xcassets in Resources */,
+				A1B49A9A2D6E3000001D58A1 /* ContentBlockers in Resources */,
 				B002B8701BAE420500C744AF /* Main.storyboard in Resources */,
 				3A2A7C1821E7805D0083CB13 /* right-arrow-forward.png in Resources */,
 				3A2A7C1E21E7842F0083CB13 /* menu-2.png in Resources */,
@@ -436,6 +445,7 @@
 				A1B49A722D6B7000001D58A1 /* BrowserYouTubeExtractor.m in Sources */,
 				A1B49A922D6E3000001D58A1 /* BrowserRezkaExtractor.m in Sources */,
 				A1B49A952D6E3000001D58A1 /* SceneDelegate.m in Sources */,
+				A1B49A982D6E3000001D58A1 /* BrowserContentBlocker.m in Sources */,
 				A1B49A742D6C1000001D58A1 /* BrowserNativeVideoAssetLoader.m in Sources */,
 				A1B49A662D6A7500001D58A1 /* AVPlayerViewController+BrowserFullscreenBlock.m in Sources */,
 				A1B49A682D6AD500001D58A1 /* UIApplication+BrowserSelectPressForwarding.m in Sources */,

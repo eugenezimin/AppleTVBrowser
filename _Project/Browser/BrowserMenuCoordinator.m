@@ -778,6 +778,25 @@ withAnimationCoordinator:(UIFocusAnimationCoordinator *)coordinator {
     return fallback;
 }
 
+- (NSString *)capturedStreamsDiagnosticsDescription {
+    NSArray<NSDictionary *> *capturedStreams = [[self.host browserWebView] capturedMediaStreams];
+    if (capturedStreams.count == 0) {
+        return @"None";
+    }
+
+    NSMutableArray<NSString *> *lines = [NSMutableArray array];
+    NSUInteger startIndex = capturedStreams.count > 5 ? capturedStreams.count - 5 : 0;
+    for (NSUInteger index = startIndex; index < capturedStreams.count; index++) {
+        NSDictionary *entry = capturedStreams[index];
+        NSString *URLString = entry[@"url"] ?: @"";
+        if (URLString.length > 160) {
+            URLString = [[URLString substringToIndex:160] stringByAppendingString:@"…"];
+        }
+        [lines addObject:[NSString stringWithFormat:@"[%@] %@", entry[@"kind"] ?: @"", URLString]];
+    }
+    return [lines componentsJoinedByString:@"\n"];
+}
+
 - (void)presentMediaDiagnostics {
     NSDictionary *diagnostics = [self mediaDiagnosticsDictionary];
     if (diagnostics == nil) {
@@ -838,6 +857,7 @@ withAnimationCoordinator:(UIFocusAnimationCoordinator *)coordinator {
                          [self stringValueForDiagnosticsKey:@"mseWebmVp9" dictionary:diagnostics fallback:@"n/a"],
                          [self stringValueForDiagnosticsKey:@"mseMp4Av1" dictionary:diagnostics fallback:@"n/a"],
                          [self stringValueForDiagnosticsKey:@"mseWebmAv1" dictionary:diagnostics fallback:@"n/a"]];
+    message = [message stringByAppendingFormat:@"\n\nCaptured Streams:\n%@", [self capturedStreamsDiagnosticsDescription]];
 
     NSLog(@"%@ %@", kBrowserMediaDiagnosticsLogPrefix, message);
 

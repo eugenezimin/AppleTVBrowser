@@ -2,6 +2,7 @@
 
 #import "BrowserDOMInteractionService.h"
 #import "BrowserNativeVideoPlayerViewController.h"
+#import "BrowserRezkaExtractor.h"
 #import "BrowserWebView.h"
 #import "BrowserYouTubeExtractor.h"
 
@@ -13,6 +14,7 @@ static BOOL const kBrowserYouTubeNativeExtractionEnabled = NO;
 @property (nonatomic, weak) id<BrowserVideoPlaybackCoordinatorHost> host;
 @property (nonatomic) BrowserDOMInteractionService *domInteractionService;
 @property (nonatomic) BrowserYouTubeExtractor *youTubeExtractor;
+@property (nonatomic) BrowserRezkaExtractor *rezkaExtractor;
 
 @end
 
@@ -37,6 +39,13 @@ static BOOL const kBrowserYouTubeNativeExtractionEnabled = NO;
         _youTubeExtractor = [BrowserYouTubeExtractor new];
     }
     return _youTubeExtractor;
+}
+
+- (BrowserRezkaExtractor *)rezkaExtractor {
+    if (_rezkaExtractor == nil) {
+        _rezkaExtractor = [BrowserRezkaExtractor new];
+    }
+    return _rezkaExtractor;
 }
 
 - (void)playVideoUnderCursorIfAvailable {
@@ -72,7 +81,9 @@ static BOOL const kBrowserYouTubeNativeExtractionEnabled = NO;
     }
 
     if (![self isNativePlayableVideoURLString:videoURLString]) {
-        [self presentUnsupportedNativeVideoAlertForVideoInfo:videoInfo ?: @{}];
+        if (![self playFallbackStreamFromTime:0.0]) {
+            [self presentUnsupportedNativeVideoAlertForVideoInfo:videoInfo ?: @{}];
+        }
         return;
     }
 
@@ -89,6 +100,14 @@ static BOOL const kBrowserYouTubeNativeExtractionEnabled = NO;
     CGPoint point = self.host.browserDOMCursorPoint;
     if ([self.domInteractionService isVideoDismissTargetAtDOMPoint:point webView:self.host.browserWebView]) {
         return NO;
+    }
+
+    // rezka's player keeps a blob: MediaSource URL on its <video>, so go straight to its stream list.
+    if ([self.domInteractionService isElementMatchingSelector:BrowserRezkaPlayerElementSelector
+                                                   atDOMPoint:point
+                                                      webView:self.host.browserWebView] &&
+        [self presentRezkaQualityPickerFromTime:0.0]) {
+        return YES;
     }
 
     NSDictionary *directVideoInfo = [self.domInteractionService directVideoInfoAtDOMPoint:point
@@ -125,9 +144,81 @@ static BOOL const kBrowserYouTubeNativeExtractionEnabled = NO;
         NSURL *videoURL = [NSURL URLWithString:videoURLString];
         NSString *title = [videoInfo[@"title"] isKindOfClass:[NSString class]] ? videoInfo[@"title"] : self.host.browserCurrentPageTitle;
         [self presentNativeVideoPlayerForURL:videoURL title:title];
-    } else {
+    } else if (![self playFallbackStreamFromTime:0.0]) {
         [self presentUnsupportedNativeVideoAlertForVideoInfo:videoInfo ?: @{}];
     }
+    return YES;
+}
+
+// Called for the page's own fullscreen button. WebKit cannot present fullscreen video on tvOS, so
+// this opens the native player regardless of the Full Screen player preference, which only governs
+// whether Select presses on videos are intercepted.
+- (void)playVideoForPageFullscreenRequestAtTime:(NSTimeInterval)startTime {
+    if (self.host.browserPresentedViewController != nil) {
+        return;
+    }
+
+    // rezka's player may hold a premium-only promo stream, so offer its quality list first.
+    if ([self presentRezkaQualityPickerFromTime:startTime]) {
+        return;
+    }
+
+    NSDictionary *videoInfo = [self.domInteractionService videoInfoAtDOMPoint:self.host.browserDOMCursorPoint
+                                                                       webView:self.host.browserWebView];
+    NSString *videoURLString = [self nativePlayableURLStringFromVideoInfo:videoInfo];
+    if ([self isNativePlayableVideoURLString:videoURLString]) {
+        NSString *title = [videoInfo[@"title"] isKindOfClass:[NSString class]] ? videoInfo[@"title"] : self.host.browserCurrentPageTitle;
+        [self presentNativeVideoPlayerForStreamURL:[NSURL URLWithString:videoURLString]
+                                             title:title
+                                        refererURL:self.host.browserWebView.request.URL
+                                         startTime:startTime];
+        return;
+    }
+
+    if (![self playFallbackStreamFromTime:startTime]) {
+        [self presentUnsupportedNativeVideoAlertForVideoInfo:videoInfo ?: @{}];
+    }
+}
+
+// Used when the <video> element only exposes a blob:/MediaSource URL: plays the stream the page's
+// player actually requested instead.
+- (BOOL)playFallbackStreamFromTime:(NSTimeInterval)startTime {
+    if ([self presentRezkaQualityPickerFromTime:startTime]) {
+        return YES;
+    }
+
+    NSDictionary *capturedStream = [self.host.browserWebView preferredCapturedMediaStream];
+    NSURL *streamURL = [NSURL URLWithString:capturedStream[@"url"] ?: @""];
+    if (![self isNativePlayableVideoURLString:streamURL.absoluteString]) {
+        return NO;
+    }
+
+    NSURL *refererURL = [NSURL URLWithString:capturedStream[@"frameURL"] ?: @""] ?: self.host.browserWebView.request.URL;
+    [self presentNativeVideoPlayerForStreamURL:streamURL title:self.host.browserCurrentPageTitle refererURL:refererURL startTime:startTime];
+    return YES;
+}
+
+- (BOOL)presentRezkaQualityPickerFromTime:(NSTimeInterval)startTime {
+    NSArray<BrowserRezkaStream *> *streams = [[self rezkaExtractor] streamsInWebView:self.host.browserWebView];
+    if (streams.count == 0) {
+        return NO;
+    }
+
+    NSString *title = self.host.browserCurrentPageTitle;
+    NSURL *refererURL = self.host.browserWebView.request.URL;
+    UIAlertController *alertController = [UIAlertController alertControllerWithTitle:@"Choose Quality"
+                                                                             message:title
+                                                                      preferredStyle:UIAlertControllerStyleAlert];
+    __weak typeof(self) weakSelf = self;
+    for (BrowserRezkaStream *stream in streams) {
+        [alertController addAction:[UIAlertAction actionWithTitle:stream.label
+                                                            style:UIAlertActionStyleDefault
+                                                          handler:^(__unused UIAlertAction *action) {
+            [weakSelf presentNativeVideoPlayerForStreamURL:stream.URL title:title refererURL:refererURL startTime:startTime];
+        }]];
+    }
+    [alertController addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [self.host browserPresentViewController:alertController];
     return YES;
 }
 
@@ -180,10 +271,6 @@ static BOOL const kBrowserYouTubeNativeExtractionEnabled = NO;
                                  title:(NSString *)title
                         requestHeaders:(NSDictionary<NSString *, NSString *> *)requestHeaders
                                cookies:(NSArray<NSHTTPCookie *> *)cookies {
-    if (![self isFullscreenVideoPlaybackEnabled]) {
-        return;
-    }
-
     if (URL == nil) {
         return;
     }
@@ -195,6 +282,55 @@ static BOOL const kBrowserYouTubeNativeExtractionEnabled = NO;
                                                                                                                   requestHeaders:requestHeaders
                                                                                                                          cookies:cookies];
     [self.host browserPresentViewController:playerViewController];
+}
+
+- (void)presentNativeVideoPlayerForStreamURL:(NSURL *)URL
+                                       title:(NSString *)title
+                                  refererURL:(NSURL *)refererURL
+                                   startTime:(NSTimeInterval)startTime {
+    if (URL == nil) {
+        return;
+    }
+
+    [self.host.browserWebView pauseAllMediaPlayback];
+
+    // Stream hosts often check Referer/Origin, so send what the page's own player would have sent.
+    BrowserNativeVideoPlayerViewController *playerViewController = [[BrowserNativeVideoPlayerViewController alloc] initWithURL:URL
+                                                                                                                          title:title
+                                                                                                                  requestHeaders:[self browserHeadersForPlaybackURL:URL refererURL:refererURL]
+                                                                                                                         cookies:[self browserCookiesForPlaybackURL:URL]
+                                                                                                         usesResourceLoaderProxy:NO];
+    playerViewController.startTime = startTime;
+    [self.host browserPresentViewController:playerViewController];
+}
+
+- (NSDictionary<NSString *, NSString *> *)browserHeadersForPlaybackURL:(NSURL *)playbackURL
+                                                                    refererURL:(NSURL *)refererURL {
+    NSMutableDictionary<NSString *, NSString *> *headers = [NSMutableDictionary dictionary];
+    NSString *userAgent = [[NSUserDefaults standardUserDefaults] stringForKey:kUserAgentDefaultsKey];
+    if (userAgent.length > 0) {
+        headers[@"User-Agent"] = userAgent;
+    }
+
+    if (refererURL.host.length > 0) {
+        NSString *origin = [NSString stringWithFormat:@"%@://%@", refererURL.scheme ?: @"https", refererURL.host];
+        BOOL isSameOrigin = [refererURL.host caseInsensitiveCompare:playbackURL.host ?: @""] == NSOrderedSame;
+        // Matches the default strict-origin-when-cross-origin referrer policy.
+        headers[@"Referer"] = isSameOrigin ? refererURL.absoluteString : [origin stringByAppendingString:@"/"];
+        headers[@"Origin"] = origin;
+    }
+    return headers;
+}
+
+- (NSArray<NSHTTPCookie *> *)browserCookiesForPlaybackURL:(NSURL *)playbackURL {
+    NSString *playbackHost = playbackURL.host.lowercaseString ?: @"";
+    NSMutableArray<NSHTTPCookie *> *matchingCookies = [NSMutableArray array];
+    for (NSHTTPCookie *cookie in [BrowserWebView allCookies]) {
+        if ([self cookie:cookie matchesHost:playbackHost]) {
+            [matchingCookies addObject:cookie];
+        }
+    }
+    return matchingCookies;
 }
 
 - (NSDictionary<NSString *, NSString *> *)browserHeadersForYouTubePlaybackURL:(NSURL *)playbackURL

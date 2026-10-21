@@ -39,6 +39,7 @@
 		A1B49A892D700000001D58A1 /* BrowserPreferencesStore.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B49A882D700000001D58A1 /* BrowserPreferencesStore.m */; };
 		A1B49A8C2D700010001D58A1 /* BrowserTabCoordinator.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B49A8B2D700010001D58A1 /* BrowserTabCoordinator.m */; };
 		A1B49A8F2D700020001D58A1 /* BrowserTabOverviewController.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B49A8E2D700020001D58A1 /* BrowserTabOverviewController.m */; };
+		A1B49A922D6E3000001D58A1 /* BrowserRezkaExtractor.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B49A912D6E3000001D58A1 /* BrowserRezkaExtractor.m */; };
 		A1B49A952D6E3000001D58A1 /* SceneDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B49A942D6E3000001D58A1 /* SceneDelegate.m */; };
 		A1B49A922D700030001D58A1 /* BrowserPageActionCoordinator.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B49A912D700030001D58A1 /* BrowserPageActionCoordinator.m */; };
 		A1B49A952D700040001D58A1 /* BrowserRemoteInputController.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B49A942D700040001D58A1 /* BrowserRemoteInputController.m */; };
@@ -97,7 +98,9 @@
 		A1B49A8B2D700010001D58A1 /* BrowserTabCoordinator.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BrowserTabCoordinator.m; sourceTree = "<group>"; };
 		A1B49A8D2D700020001D58A1 /* BrowserTabOverviewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BrowserTabOverviewController.h; sourceTree = "<group>"; };
 		A1B49A8E2D700020001D58A1 /* BrowserTabOverviewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BrowserTabOverviewController.m; sourceTree = "<group>"; };
+		A1B49A902D6E3000001D58A1 /* BrowserRezkaExtractor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BrowserRezkaExtractor.h; sourceTree = "<group>"; };
 		A1B49A902D700030001D58A1 /* BrowserPageActionCoordinator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BrowserPageActionCoordinator.h; sourceTree = "<group>"; };
+		A1B49A912D6E3000001D58A1 /* BrowserRezkaExtractor.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BrowserRezkaExtractor.m; sourceTree = "<group>"; };
 		A1B49A932D6E3000001D58A1 /* SceneDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SceneDelegate.h; sourceTree = "<group>"; };
 		A1B49A942D6E3000001D58A1 /* SceneDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SceneDelegate.m; sourceTree = "<group>"; };
 		A1B49A912D700030001D58A1 /* BrowserPageActionCoordinator.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BrowserPageActionCoordinator.m; sourceTree = "<group>"; };
@@ -255,6 +258,8 @@
 				A1B49A732D6C1000001D58A1 /* BrowserNativeVideoAssetLoader.m */,
 				A1B49A702D6B7000001D58A1 /* BrowserYouTubeExtractor.h */,
 				A1B49A712D6B7000001D58A1 /* BrowserYouTubeExtractor.m */,
+				A1B49A902D6E3000001D58A1 /* BrowserRezkaExtractor.h */,
+				A1B49A912D6E3000001D58A1 /* BrowserRezkaExtractor.m */,
 				A1B49A932D6E3000001D58A1 /* SceneDelegate.h */,
 				A1B49A942D6E3000001D58A1 /* SceneDelegate.m */,
 			);
@@ -429,6 +434,7 @@
 				A1B49A5B2D684000001D58A1 /* BrowserTopBarView.m in Sources */,
 				A1B49A6C2D6B1000001D58A1 /* BrowserNativeVideoPlayerViewController.m in Sources */,
 				A1B49A722D6B7000001D58A1 /* BrowserYouTubeExtractor.m in Sources */,
+				A1B49A922D6E3000001D58A1 /* BrowserRezkaExtractor.m in Sources */,
 				A1B49A952D6E3000001D58A1 /* SceneDelegate.m in Sources */,
 				A1B49A742D6C1000001D58A1 /* BrowserNativeVideoAssetLoader.m in Sources */,
 				A1B49A662D6A7500001D58A1 /* AVPlayerViewController+BrowserFullscreenBlock.m in Sources */,

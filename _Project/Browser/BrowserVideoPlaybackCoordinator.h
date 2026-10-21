@@ -25,6 +25,7 @@ NS_ASSUME_NONNULL_BEGIN
        domInteractionService:(BrowserDOMInteractionService *)domInteractionService;
 - (void)playVideoUnderCursorIfAvailable;
 - (BOOL)handleSelectPressForVideoAtCursor;
+- (void)playVideoForPageFullscreenRequestAtTime:(NSTimeInterval)startTime;
 
 @end
 

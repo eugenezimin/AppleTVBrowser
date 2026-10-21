@@ -4,6 +4,7 @@
 #import <AVFoundation/AVFoundation.h>
 
 static NSString * const kBrowserNativeVideoPlayerLogPrefix = @"[NativeVideoPlayer]";
+static NSTimeInterval const kBrowserNativeVideoSkipInterval = 10.0;
 static NSString * const kBrowserNativePlayerInputLogPrefix = @"[InputTrace][NativePlayer]";
 
 static NSString *BrowserNativePlayerPressTypeString(UIPressType type) {
@@ -37,6 +38,11 @@ static NSString *BrowserNativePlayerPressPhaseString(UIPressPhase phase) {
 @property (nonatomic, copy) NSDictionary<NSString *, NSString *> *requestHeaders;
 @property (nonatomic, copy) NSArray<NSHTTPCookie *> *requestCookies;
 @property (nonatomic, strong) BrowserNativeVideoAssetLoader *assetLoader;
+@property (nonatomic) BOOL usesResourceLoaderProxy;
+@property (nonatomic) BOOL presentedFailureAlert;
+@property (nonatomic, strong) NSError *pendingFailureError;
+@property (nonatomic) BOOL appliedStartTime;
+@property (nonatomic, strong) NSNumber *transportBarShowsPlaying;
 
 @end
 
@@ -58,12 +64,21 @@ static NSString *BrowserNativePlayerPressPhaseString(UIPressPhase phase) {
                       title:(NSString *)title
              requestHeaders:(NSDictionary<NSString *,NSString *> *)requestHeaders
                     cookies:(NSArray<NSHTTPCookie *> *)cookies {
+    return [self initWithURL:URL title:title requestHeaders:requestHeaders cookies:cookies usesResourceLoaderProxy:YES];
+}
+
+- (instancetype)initWithURL:(NSURL *)URL
+                      title:(NSString *)title
+             requestHeaders:(NSDictionary<NSString *,NSString *> *)requestHeaders
+                    cookies:(NSArray<NSHTTPCookie *> *)cookies
+    usesResourceLoaderProxy:(BOOL)usesResourceLoaderProxy {
     self = [super initWithNibName:nil bundle:nil];
     if (self) {
         _videoURL = URL;
         _videoTitle = [title copy] ?: @"";
         _requestHeaders = [requestHeaders copy] ?: @{};
         _requestCookies = [cookies copy] ?: @[];
+        _usesResourceLoaderProxy = usesResourceLoaderProxy;
         self.modalPresentationStyle = UIModalPresentationFullScreen;
     }
     return self;
@@ -87,12 +102,17 @@ static NSString *BrowserNativePlayerPressPhaseString(UIPressPhase phase) {
         if (self.requestCookies.count > 0) {
             assetOptions[@"AVURLAssetHTTPCookiesKey"] = self.requestCookies;
         }
-        self.assetLoader = [[BrowserNativeVideoAssetLoader alloc] initWithRequestHeaders:self.requestHeaders cookies:self.requestCookies];
-        NSURL *assetURL = [self.assetLoader assetURLForPlaybackURL:self.videoURL];
-        AVURLAsset *asset = [AVURLAsset URLAssetWithURL:assetURL options:assetOptions];
-        [self.assetLoader attachToAsset:asset];
+        AVURLAsset *asset = nil;
+        if (self.usesResourceLoaderProxy) {
+            self.assetLoader = [[BrowserNativeVideoAssetLoader alloc] initWithRequestHeaders:self.requestHeaders cookies:self.requestCookies];
+            NSURL *assetURL = [self.assetLoader assetURLForPlaybackURL:self.videoURL];
+            asset = [AVURLAsset URLAssetWithURL:assetURL options:assetOptions];
+            [self.assetLoader attachToAsset:asset];
+        } else {
+            asset = [AVURLAsset URLAssetWithURL:self.videoURL options:assetOptions];
+        }
         playerItem = [AVPlayerItem playerItemWithAsset:asset];
-        [self log:@"using request headers %@ cookies=%lu", self.requestHeaders, (unsigned long)self.requestCookies.count];
+        [self log:@"using request headers %@ cookies=%lu proxy=%d", self.requestHeaders, (unsigned long)self.requestCookies.count, self.usesResourceLoaderProxy];
     } else {
         playerItem = [AVPlayerItem playerItemWithURL:self.videoURL];
     }
@@ -109,17 +129,79 @@ static NSString *BrowserNativePlayerPressPhaseString(UIPressPhase phase) {
                                                object:self.player.currentItem];
 
     [self.player.currentItem addObserver:self forKeyPath:@"status" options:NSKeyValueObservingOptionInitial | NSKeyValueObservingOptionNew context:NULL];
-    if (@available(tvOS 10.0, *)) {
-        [self.player addObserver:self
-                      forKeyPath:@"timeControlStatus"
-                         options:NSKeyValueObservingOptionInitial | NSKeyValueObservingOptionNew
-                         context:NULL];
+    [self.player addObserver:self
+                  forKeyPath:@"timeControlStatus"
+                     options:NSKeyValueObservingOptionInitial | NSKeyValueObservingOptionNew
+                     context:NULL];
+    [self updateTransportBarItems];
+}
+
+// tvOS shows only the progress bar by default; these add on-screen skip and play/pause buttons to it.
+- (void)updateTransportBarItems {
+    // Rebuilding the items moves focus, so only do it when the play/pause button has to change.
+    BOOL playing = self.player.timeControlStatus != AVPlayerTimeControlStatusPaused;
+    if (self.transportBarShowsPlaying != nil && self.transportBarShowsPlaying.boolValue == playing) {
+        return;
     }
+    self.transportBarShowsPlaying = @(playing);
+
+    __weak typeof(self) weakSelf = self;
+    NSString *skipBackTitle = [NSString stringWithFormat:@"Back %.0f Seconds", kBrowserNativeVideoSkipInterval];
+    NSString *skipForwardTitle = [NSString stringWithFormat:@"Forward %.0f Seconds", kBrowserNativeVideoSkipInterval];
+    self.transportBarCustomMenuItems = @[
+        [UIAction actionWithTitle:skipBackTitle
+                            image:[UIImage systemImageNamed:@"gobackward.10"]
+                       identifier:nil
+                          handler:^(__unused UIAction *action) {
+            [weakSelf skipBySeconds:-kBrowserNativeVideoSkipInterval];
+        }],
+        [UIAction actionWithTitle:playing ? @"Pause" : @"Play"
+                            image:[UIImage systemImageNamed:playing ? @"pause.fill" : @"play.fill"]
+                       identifier:nil
+                          handler:^(__unused UIAction *action) {
+            [weakSelf togglePlayback];
+        }],
+        [UIAction actionWithTitle:skipForwardTitle
+                            image:[UIImage systemImageNamed:@"goforward.10"]
+                       identifier:nil
+                          handler:^(__unused UIAction *action) {
+            [weakSelf skipBySeconds:kBrowserNativeVideoSkipInterval];
+        }],
+    ];
+}
+
+- (void)togglePlayback {
+    if (self.player.timeControlStatus == AVPlayerTimeControlStatusPaused) {
+        [self.player play];
+    } else {
+        [self.player pause];
+    }
+}
+
+- (void)skipBySeconds:(NSTimeInterval)seconds {
+    CMTime currentTime = self.player.currentTime;
+    if (!CMTIME_IS_NUMERIC(currentTime)) {
+        return;
+    }
+
+    NSTimeInterval targetTime = MAX(CMTimeGetSeconds(currentTime) + seconds, 0.0);
+    NSTimeInterval duration = CMTimeGetSeconds(self.player.currentItem.duration);
+    if (isfinite(duration) && duration > 0.0) {
+        targetTime = MIN(targetTime, duration);
+    }
+    [self log:@"skip %+.0fs to %.1f", seconds, targetTime];
+    [self.player seekToTime:CMTimeMakeWithSeconds(targetTime, NSEC_PER_SEC)];
 }
 
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
     NSLog(@"%@ viewDidAppear", kBrowserNativePlayerInputLogPrefix);
+    if (self.pendingFailureError != nil) {
+        NSError *error = self.pendingFailureError;
+        self.pendingFailureError = nil;
+        [self presentPlaybackFailureAlertWithError:error];
+        return;
+    }
     [self log:@"viewDidAppear play"];
     [self.player play];
 }
@@ -141,51 +223,40 @@ static NSString *BrowserNativePlayerPressPhaseString(UIPressPhase phase) {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
-- (void)togglePlayback {
-    if (self.player.rate > 0.0) {
-        [self log:@"toggle pause"];
-        [self.player pause];
-    } else {
-        [self log:@"toggle play"];
-        [self.player play];
-    }
-}
-
-- (void)skipByInterval:(NSTimeInterval)delta {
-    if (self.player.currentItem == nil) {
-        return;
-    }
-
-    NSTimeInterval currentTime = CMTimeGetSeconds(self.player.currentTime);
-    if (!isfinite(currentTime)) {
-        currentTime = 0.0;
-    }
-
-    NSTimeInterval duration = CMTimeGetSeconds(self.player.currentItem.duration);
-    NSTimeInterval targetTime = currentTime + delta;
-    if (isfinite(duration) && duration > 0.0) {
-        targetTime = MIN(MAX(targetTime, 0.0), MAX(duration - 0.05, 0.0));
-    } else {
-        targetTime = MAX(targetTime, 0.0);
-    }
-
-    [self log:@"seek delta=%0.3f from=%0.3f to=%0.3f", delta, currentTime, targetTime];
-    CMTime seekTime = CMTimeMakeWithSeconds(targetTime, NSEC_PER_SEC);
-    [self.player seekToTime:seekTime toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero];
-}
-
-- (void)scrubByHorizontalDelta:(CGFloat)delta {
-    // Approximate touch-surface horizontal movement to timeline seek.
-    NSTimeInterval secondsDelta = (NSTimeInterval)delta / 4.0;
-    if (fabs(secondsDelta) < 0.01) {
-        return;
-    }
-    [self skipByInterval:secondsDelta];
-}
-
 - (void)closePlayer {
     [self log:@"close player"];
     [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (void)presentPlaybackFailureAlertWithError:(NSError *)error {
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self presentPlaybackFailureAlertWithError:error];
+        });
+        return;
+    }
+
+    // The item can fail before the player is on screen; viewDidAppear picks it up then.
+    if (self.view.window == nil) {
+        self.pendingFailureError = error;
+        return;
+    }
+
+    if (self.presentedFailureAlert || self.presentedViewController != nil) {
+        return;
+    }
+    self.presentedFailureAlert = YES;
+
+    NSString *reason = error.localizedFailureReason ?: error.localizedDescription ?: @"Unknown error.";
+    NSString *message = [NSString stringWithFormat:@"%@\n\nHost: %@", reason, self.videoURL.host ?: @"unknown"];
+    UIAlertController *alertController = [UIAlertController alertControllerWithTitle:@"Video Could Not Be Played"
+                                                                             message:message
+                                                                      preferredStyle:UIAlertControllerStyleAlert];
+    __weak typeof(self) weakSelf = self;
+    [alertController addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:^(__unused UIAlertAction *action) {
+        [weakSelf closePlayer];
+    }]];
+    [self presentViewController:alertController animated:YES completion:nil];
 }
 
 - (void)handlePlayerItemFailedToPlayToEndTime:(NSNotification *)notification {
@@ -215,31 +286,38 @@ static NSString *BrowserNativePlayerPressPhaseString(UIPressPhase phase) {
                  CMTimeGetSeconds(self.player.currentItem.duration),
                  self.player.currentItem.isPlaybackLikelyToKeepUp,
                  self.player.currentItem.isPlaybackBufferEmpty];
+                if (!self.appliedStartTime && self.startTime > 1.0) {
+                    self.appliedStartTime = YES;
+                    [self log:@"seek to start time %0.3f", self.startTime];
+                    [self.player seekToTime:CMTimeMakeWithSeconds(self.startTime, NSEC_PER_SEC)];
+                }
                 break;
             case AVPlayerItemStatusFailed:
                 [self log:@"item status=failed error=%@", self.player.currentItem.error];
+                [self presentPlaybackFailureAlertWithError:self.player.currentItem.error];
                 break;
         }
         return;
     }
 
     if (object == self.player && [keyPath isEqualToString:@"timeControlStatus"]) {
-        if (@available(tvOS 10.0, *)) {
-            NSString *status = @"unknown";
-            switch (self.player.timeControlStatus) {
-                case AVPlayerTimeControlStatusPaused:
-                    status = @"paused";
-                    break;
-                case AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate:
-                    status = @"waiting";
-                    break;
-                case AVPlayerTimeControlStatusPlaying:
-                    status = @"playing";
-                    break;
-            }
-            [self log:@"timeControlStatus=%@ reason=%@", status, self.player.reasonForWaitingToPlay ?: @""];
-            return;
+        NSString *status = @"unknown";
+        switch (self.player.timeControlStatus) {
+            case AVPlayerTimeControlStatusPaused:
+                status = @"paused";
+                break;
+            case AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate:
+                status = @"waiting";
+                break;
+            case AVPlayerTimeControlStatusPlaying:
+                status = @"playing";
+                break;
         }
+        [self log:@"timeControlStatus=%@ reason=%@", status, self.player.reasonForWaitingToPlay ?: @""];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self updateTransportBarItems];
+        });
+        return;
     }
 
     [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];

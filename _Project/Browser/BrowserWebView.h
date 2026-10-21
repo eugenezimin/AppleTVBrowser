@@ -10,6 +10,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)webViewDidStartLoad:(id _Nonnull)webView;
 - (void)webViewDidFinishLoad:(id _Nonnull)webView;
 - (void)webView:(id _Nonnull)webView didFailLoadWithError:(NSError * _Nonnull)error;
+// The page asked to show a video fullscreen; currentTime is the page video's playback position.
+- (void)webView:(id _Nonnull)webView didRequestVideoFullscreenAtTime:(NSTimeInterval)currentTime;
 
 @end
 
@@ -23,6 +25,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly, getter=canGoForward) BOOL canGoForward;
 @property (nonatomic, readonly, getter=isLoading) BOOL loading;
 @property (nonatomic) BOOL scalesPageToFit;
+// Media URLs requested by the current page (any frame), oldest first. Each entry has the keys
+// "url", "kind" ("manifest", "progressive", "dash", "element" or "rezka-streams"), "frameURL" and "date".
+// Fullscreen requests are not stored here; they go to -webView:didRequestVideoFullscreenAtTime:.
+@property (nonatomic, readonly, copy) NSArray<NSDictionary *> *capturedMediaStreams;
 
 - (instancetype)initWithUserAgent:(NSString * _Nullable)userAgent
       allowsInlineMediaPlayback:(BOOL)allowsInlineMediaPlayback NS_DESIGNATED_INITIALIZER;
@@ -35,6 +41,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSString * _Nonnull)runtimeMediaPreferenceReport;
 - (void)setUserAgent:(NSString * _Nullable)userAgent;
 - (void)pauseAllMediaPlayback;
+// The captured stream most likely to be the page's main video, or nil when nothing natively playable was captured.
+- (nullable NSDictionary *)preferredCapturedMediaStream;
 
 + (nullable NSData *)cookieDataRepresentation;
 + (NSArray<NSHTTPCookie *> * _Nonnull)allCookies;

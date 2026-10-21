@@ -745,6 +745,16 @@ static UIColor *kTextColor(void) {
     }
 }
 
+- (void)webView:(id)webView didRequestVideoFullscreenAtTime:(NSTimeInterval)currentTime {
+    if (webView != self.webview) {
+        return;
+    }
+    // Script messages can arrive while a synchronous JavaScript evaluation is pumping the run loop.
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self.videoPlaybackCoordinator playVideoForPageFullscreenRequestAtTime:currentTime];
+    });
+}
+
 - (void)webView:(id)webView didFailLoadWithError:(NSError *)error {
     BrowserTabViewModel *tab = [self.tabCoordinator tabForWebView:webView];
     if (tab == nil) {

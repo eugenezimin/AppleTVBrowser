@@ -469,6 +469,21 @@ static NSString * const kEditableElementSelector = @"input, textarea, select, [c
     return [result isEqualToString:@"true"];
 }
 
+- (BOOL)isElementMatchingSelector:(NSString *)selector
+                       atDOMPoint:(CGPoint)point
+                          webView:(BrowserWebView *)webView {
+    if (selector.length == 0) {
+        return NO;
+    }
+
+    NSString *body = [NSString stringWithFormat:
+                      @"var selector='%@';"
+                      "try { return (resolvedElement && resolvedElement.closest && resolvedElement.closest(selector)) ? 'true' : 'false'; } catch (error) { return 'false'; }",
+                      [self javaScriptEscapedString:selector]];
+    NSString *result = [self evaluateResolvedElementJavaScriptAtPoint:point webView:webView body:body];
+    return [result isEqualToString:@"true"];
+}
+
 - (NSDictionary *)primedVideoInfoAtDOMPoint:(CGPoint)point
                                      webView:(BrowserWebView *)webView {
     [self evaluateResolvedElementJavaScriptAtPoint:point

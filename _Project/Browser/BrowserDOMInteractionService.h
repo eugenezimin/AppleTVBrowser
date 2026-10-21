@@ -29,6 +29,9 @@ NS_ASSUME_NONNULL_BEGIN
                                    webView:(BrowserWebView *)webView;
 - (BOOL)isVideoDismissTargetAtDOMPoint:(CGPoint)point
                                 webView:(BrowserWebView *)webView;
+- (BOOL)isElementMatchingSelector:(NSString *)selector
+                       atDOMPoint:(CGPoint)point
+                          webView:(BrowserWebView *)webView;
 - (NSDictionary *)primedVideoInfoAtDOMPoint:(CGPoint)point
                                      webView:(BrowserWebView *)webView;
 - (NSDictionary *)activateVideoTargetAtDOMPoint:(CGPoint)point

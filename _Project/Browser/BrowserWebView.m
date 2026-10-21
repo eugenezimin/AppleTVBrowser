@@ -1,5 +1,6 @@
 #import "BrowserWebView.h"
 
+
 #import <dlfcn.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
@@ -445,15 +446,156 @@ static NSString *BrowserYouTubeRequestCaptureScript(void) {
     "})();";
 }
 
-static void BrowserInstallYouTubeCaptureUserScript(id configuration) {
+static NSString *BrowserMediaStreamCaptureScript(void) {
+    return
+    @"(function(){"
+        "if (window.__browserMediaHookInstalled) { return; }"
+        "window.__browserMediaHookInstalled = true;"
+        "var mediaPattern = /\\.(m3u8|mpd|mp4|m4v|mov)(\\?|#|:|$)/i;"
+        "var segmentPattern = /\\.(ts|m4s|aac|vtt|webvtt|key)(\\?|#|$)/i;"
+        "var lastReportTimes = {};"
+        "function absoluteURL(url) {"
+            "try { return String(new URL(String(url), document.baseURI).toString()); } catch (error) { return String(url || ''); }"
+        "}"
+        "function post(value, kind) {"
+            "try {"
+                "var handlers = window.webkit && window.webkit.messageHandlers;"
+                "if (!handlers || !handlers.browserMedia) { return; }"
+                "var key = kind + '|' + value;"
+                "var now = Date.now();"
+                "if (lastReportTimes[key] && now - lastReportTimes[key] < 1000) { return; }"
+                "lastReportTimes[key] = now;"
+                "handlers.browserMedia.postMessage({ url: String(value), kind: String(kind), frameURL: String(location.href || '') });"
+            "} catch (error) {}"
+        "}"
+        "function reportURL(url, kind) {"
+            "var value = absoluteURL(url);"
+            "if (!/^https?:/i.test(value)) { return; }"
+            "post(value, kind);"
+        "}"
+        "function inspectRequestURL(url) {"
+            "var value = String(url || '');"
+            "if (!value || /^(blob|data):/i.test(value)) { return; }"
+            "var path = value.split('#')[0];"
+            "if (segmentPattern.test(path)) { return; }"
+            "if (path.indexOf(':hls:manifest') === -1 && !mediaPattern.test(path)) { return; }"
+            "var kind = 'progressive';"
+            "if (/\\.m3u8/i.test(path) || path.indexOf(':hls:manifest') !== -1) { kind = 'manifest'; }"
+            "else if (/\\.mpd/i.test(path)) { kind = 'dash'; }"
+            "reportURL(value, kind);"
+        "}"
+        "function inspectElementSource(element, value) {"
+            "var tagName = element && element.tagName ? element.tagName.toLowerCase() : '';"
+            "if (tagName !== 'video' && tagName !== 'source') { return; }"
+            "var url = String(value || '');"
+            "if (!url || /^(blob|data|mediastream):/i.test(url)) { return; }"
+            "reportURL(url, 'element');"
+        "}"
+        "function inspectRezkaResponse(xhr) {"
+            "try {"
+                "var json = xhr.responseType === 'json' ? xhr.response : JSON.parse(xhr.responseText || '');"
+                "if (json && json.success !== false && typeof json.url === 'string' && json.url) { post(json.url, 'rezka-streams'); }"
+            "} catch (error) {}"
+        "}"
+        "if (window.fetch) {"
+            "var originalFetch = window.fetch;"
+            "window.fetch = function(input) {"
+                "try { inspectRequestURL(input && typeof input === 'object' && 'url' in input ? input.url : input); } catch (error) {}"
+                "return originalFetch.apply(this, arguments);"
+            "};"
+        "}"
+        "if (window.XMLHttpRequest && window.XMLHttpRequest.prototype) {"
+            "var originalOpen = window.XMLHttpRequest.prototype.open;"
+            "window.XMLHttpRequest.prototype.open = function(method, url) {"
+                "try {"
+                    "var value = String(url || '');"
+                    "inspectRequestURL(value);"
+                    "if (value.indexOf('/ajax/get_cdn_series/') !== -1 && !this.__browserRezkaListenerInstalled) {"
+                        "this.__browserRezkaListenerInstalled = true;"
+                        "this.addEventListener('load', function() { inspectRezkaResponse(this); });"
+                    "}"
+                "} catch (error) {}"
+                "return originalOpen.apply(this, arguments);"
+            "};"
+        "}"
+        "function hookSourceProperty(prototype) {"
+            "try {"
+                "var descriptor = Object.getOwnPropertyDescriptor(prototype, 'src');"
+                "if (!descriptor || !descriptor.set || !descriptor.configurable) { return; }"
+                "Object.defineProperty(prototype, 'src', {"
+                    "configurable: true,"
+                    "enumerable: descriptor.enumerable,"
+                    "get: descriptor.get,"
+                    "set: function(value) {"
+                        "try { inspectElementSource(this, value); } catch (error) {}"
+                        "return descriptor.set.call(this, value);"
+                    "}"
+                "});"
+            "} catch (error) {}"
+        "}"
+        "if (window.HTMLMediaElement) { hookSourceProperty(window.HTMLMediaElement.prototype); }"
+        "if (window.HTMLSourceElement) { hookSourceProperty(window.HTMLSourceElement.prototype); }"
+        "function findVideoForFullscreen(element) {"
+            "if (element && element.tagName && element.tagName.toLowerCase() === 'video') { return element; }"
+            "var video = element && element.querySelector ? element.querySelector('video') : null;"
+            "return video || document.querySelector('video');"
+        "}"
+        "var lastFullscreenRequestTime = 0;"
+        "function requestNativeFullscreen(element) {"
+            "try {"
+                "var handlers = window.webkit && window.webkit.messageHandlers;"
+                "if (!handlers || !handlers.browserMedia) { return false; }"
+                "var now = Date.now();"
+                "if (now - lastFullscreenRequestTime < 1000) { return true; }"
+                "lastFullscreenRequestTime = now;"
+                "var video = findVideoForFullscreen(element);"
+                "var currentTime = video && isFinite(video.currentTime) ? video.currentTime : 0;"
+                "handlers.browserMedia.postMessage({ url: String(location.href || ''), kind: 'fullscreen-request', frameURL: String(location.href || ''), currentTime: currentTime });"
+                "return true;"
+            "} catch (error) { return false; }"
+        "}"
+        // WebKit on tvOS cannot present element fullscreen, so player fullscreen buttons are routed to the native player.
+        "function hookFullscreenMethod(prototype, name, returnsPromise) {"
+            "if (!prototype || typeof prototype[name] !== 'function') { return; }"
+            "var original = prototype[name];"
+            "prototype[name] = function() {"
+                "if (requestNativeFullscreen(this)) {"
+                    "return returnsPromise ? Promise.reject(new TypeError('Fullscreen is presented natively')) : undefined;"
+                "}"
+                "return original.apply(this, arguments);"
+            "};"
+        "}"
+        "if (window.Element && window.Element.prototype) {"
+            "hookFullscreenMethod(window.Element.prototype, 'requestFullscreen', true);"
+            "hookFullscreenMethod(window.Element.prototype, 'webkitRequestFullscreen', false);"
+            "hookFullscreenMethod(window.Element.prototype, 'webkitRequestFullScreen', false);"
+        "}"
+        "if (window.HTMLVideoElement && window.HTMLVideoElement.prototype) {"
+            "hookFullscreenMethod(window.HTMLVideoElement.prototype, 'webkitEnterFullscreen', false);"
+            "hookFullscreenMethod(window.HTMLVideoElement.prototype, 'webkitEnterFullScreen', false);"
+        "}"
+        "if (window.Element && window.Element.prototype) {"
+            "var originalSetAttribute = window.Element.prototype.setAttribute;"
+            "window.Element.prototype.setAttribute = function(name, value) {"
+                "try { if (String(name).toLowerCase() === 'src') { inspectElementSource(this, value); } } catch (error) {}"
+                "return originalSetAttribute.apply(this, arguments);"
+            "};"
+        "}"
+    "})();";
+}
+
+static NSString * const kBrowserMediaMessageHandlerName = @"browserMedia";
+static NSUInteger const kBrowserMaximumCapturedMediaStreams = 50;
+static NSTimeInterval const kBrowserCapturedManifestBurstInterval = 3.0;
+
+static id BrowserUserContentControllerForConfiguration(id configuration) {
     if (configuration == nil) {
-        return;
+        return nil;
     }
 
     Class userContentControllerClass = NSClassFromString(kBrowserUserContentControllerClassName);
-    Class userScriptClass = NSClassFromString(kBrowserUserScriptClassName);
-    if (userContentControllerClass == Nil || userScriptClass == Nil) {
-        return;
+    if (userContentControllerClass == Nil) {
+        return nil;
     }
 
     SEL userContentControllerGetter = NSSelectorFromString(@"userContentController");
@@ -467,17 +609,24 @@ static void BrowserInstallYouTubeCaptureUserScript(id configuration) {
         userContentController = ((id (*)(id, SEL))objc_msgSend)((id)userContentControllerClass, @selector(new));
         ((void (*)(id, SEL, id))objc_msgSend)(configuration, setUserContentControllerSelector, userContentController);
     }
+    return userContentController;
+}
 
+static void BrowserInstallUserScript(id configuration, NSString *source, BOOL forMainFrameOnly) {
+    Class userScriptClass = NSClassFromString(kBrowserUserScriptClassName);
+    id userContentController = BrowserUserContentControllerForConfiguration(configuration);
     SEL addUserScriptSelector = NSSelectorFromString(@"addUserScript:");
     SEL userScriptInitializer = NSSelectorFromString(@"initWithSource:injectionTime:forMainFrameOnly:");
-    if (userContentController == nil ||
+    if (userScriptClass == Nil ||
+        userContentController == nil ||
         ![userContentController respondsToSelector:addUserScriptSelector] ||
         ![userScriptClass instancesRespondToSelector:userScriptInitializer]) {
         return;
     }
 
+    // Injection time 0 is WKUserScriptInjectionTimeAtDocumentStart.
     id userScript = ((id (*)(id, SEL))objc_msgSend)((id)userScriptClass, @selector(alloc));
-    userScript = ((id (*)(id, SEL, id, NSInteger, BOOL))objc_msgSend)(userScript, userScriptInitializer, BrowserYouTubeRequestCaptureScript(), 0, NO);
+    userScript = ((id (*)(id, SEL, id, NSInteger, BOOL))objc_msgSend)(userScript, userScriptInitializer, source, 0, forMainFrameOnly);
     if (userScript != nil) {
         ((void (*)(id, SEL, id))objc_msgSend)(userContentController, addUserScriptSelector, userScript);
     }
@@ -485,7 +634,47 @@ static void BrowserInstallYouTubeCaptureUserScript(id configuration) {
 
 @interface BrowserWebView ()
 
+- (void)handleMediaCaptureMessageBody:(id)body;
+
+@end
+
+// WKUserContentController retains its script message handlers, so this forwards to the web view weakly.
+@interface BrowserMediaScriptMessageHandler : NSObject
+
+@property (nonatomic, weak) BrowserWebView *webView;
+
+@end
+
+@implementation BrowserMediaScriptMessageHandler
+
++ (void)initialize {
+    if (self != [BrowserMediaScriptMessageHandler class]) {
+        return;
+    }
+    Protocol *messageHandlerProtocol = objc_getProtocol("WKScriptMessageHandler");
+    if (messageHandlerProtocol != NULL) {
+        class_addProtocol(self, messageHandlerProtocol);
+    }
+}
+
+- (void)userContentController:(id)userContentController didReceiveScriptMessage:(id)message {
+    (void)userContentController;
+    SEL bodySelector = NSSelectorFromString(@"body");
+    if (![message respondsToSelector:bodySelector]) {
+        return;
+    }
+    id body = ((id (*)(id, SEL))objc_msgSend)(message, bodySelector);
+    [self.webView handleMediaCaptureMessageBody:body];
+}
+
+@end
+
+@interface BrowserWebView ()
+
 @property (nullable, nonatomic, strong) id runtimeWebView;
+@property (nullable, nonatomic, strong) id userContentController;
+@property (nonatomic, strong) BrowserMediaScriptMessageHandler *mediaMessageHandler;
+@property (nonatomic, strong) NSMutableArray<NSDictionary *> *mutableCapturedMediaStreams;
 @property (nullable, nonatomic, strong) NSURLRequest *lastRequest;
 @property (nullable, nonatomic, copy) NSString *lastTitle;
 @property (nonatomic, copy) NSString *userAgent;
@@ -521,6 +710,7 @@ static void BrowserInstallYouTubeCaptureUserScript(id configuration) {
     self.backgroundColor = UIColor.blackColor;
     self.userAgent = userAgent;
     self.scalesPageToFit = NO;
+    self.mutableCapturedMediaStreams = [NSMutableArray array];
 
     Class configurationClass = NSClassFromString(kBrowserWebViewConfigurationClassName);
     Class webViewClass = NSClassFromString(kBrowserWebViewClassName);
@@ -534,7 +724,9 @@ static void BrowserInstallYouTubeCaptureUserScript(id configuration) {
         ((void (*)(id, SEL, BOOL))objc_msgSend)(configuration, allowsInlineMediaPlaybackSelector, allowsInlineMediaPlayback);
     }
     BrowserConfigurePrivateMediaPreferences(configuration);
-    BrowserInstallYouTubeCaptureUserScript(configuration);
+    BrowserInstallUserScript(configuration, BrowserYouTubeRequestCaptureScript(), NO);
+    BrowserInstallUserScript(configuration, BrowserMediaStreamCaptureScript(), NO);
+    [self installMediaMessageHandlerOnConfiguration:configuration];
 
     id webViewObject = ((id (*)(id, SEL))objc_msgSend)((id)webViewClass, @selector(alloc));
     SEL initializer = NSSelectorFromString(@"initWithFrame:configuration:");
@@ -561,6 +753,100 @@ static void BrowserInstallYouTubeCaptureUserScript(id configuration) {
 
     [self addSubview:runtimeView];
     [self setUserAgent:userAgent];
+}
+
+- (void)dealloc {
+    SEL removeHandlerSelector = NSSelectorFromString(@"removeScriptMessageHandlerForName:");
+    if (self.mediaMessageHandler != nil && [self.userContentController respondsToSelector:removeHandlerSelector]) {
+        ((void (*)(id, SEL, id))objc_msgSend)(self.userContentController, removeHandlerSelector, kBrowserMediaMessageHandlerName);
+    }
+}
+
+- (void)installMediaMessageHandlerOnConfiguration:(id)configuration {
+    id userContentController = BrowserUserContentControllerForConfiguration(configuration);
+    SEL addHandlerSelector = NSSelectorFromString(@"addScriptMessageHandler:name:");
+    if (userContentController == nil || ![userContentController respondsToSelector:addHandlerSelector]) {
+        return;
+    }
+
+    BrowserMediaScriptMessageHandler *handler = [BrowserMediaScriptMessageHandler new];
+    handler.webView = self;
+    ((void (*)(id, SEL, id, id))objc_msgSend)(userContentController, addHandlerSelector, handler, kBrowserMediaMessageHandlerName);
+    self.userContentController = userContentController;
+    self.mediaMessageHandler = handler;
+}
+
+- (void)handleMediaCaptureMessageBody:(id)body {
+    if (![body isKindOfClass:[NSDictionary class]]) {
+        return;
+    }
+
+    NSDictionary *message = (NSDictionary *)body;
+    NSString *URLString = [message[@"url"] isKindOfClass:[NSString class]] ? message[@"url"] : @"";
+    NSString *kind = [message[@"kind"] isKindOfClass:[NSString class]] ? message[@"kind"] : @"";
+    NSString *frameURLString = [message[@"frameURL"] isKindOfClass:[NSString class]] ? message[@"frameURL"] : @"";
+    if (URLString.length == 0 || kind.length == 0) {
+        return;
+    }
+
+    if ([kind isEqualToString:@"fullscreen-request"]) {
+        NSTimeInterval currentTime = [message[@"currentTime"] isKindOfClass:[NSNumber class]] ? [message[@"currentTime"] doubleValue] : 0.0;
+        if ([self.delegate respondsToSelector:@selector(webView:didRequestVideoFullscreenAtTime:)]) {
+            [self.delegate webView:self didRequestVideoFullscreenAtTime:currentTime];
+        }
+        return;
+    }
+
+    NSMutableArray<NSDictionary *> *entries = self.mutableCapturedMediaStreams;
+    NSIndexSet *duplicateIndexes = [entries indexesOfObjectsPassingTest:^BOOL(NSDictionary *entry, __unused NSUInteger index, __unused BOOL *stop) {
+        return [entry[@"url"] isEqualToString:URLString] && [entry[@"kind"] isEqualToString:kind];
+    }];
+    [entries removeObjectsAtIndexes:duplicateIndexes];
+    [entries addObject:@{
+        @"url": URLString,
+        @"kind": kind,
+        @"frameURL": frameURLString,
+        @"date": [NSDate date],
+    }];
+    if (entries.count > kBrowserMaximumCapturedMediaStreams) {
+        [entries removeObjectsInRange:NSMakeRange(0, entries.count - kBrowserMaximumCapturedMediaStreams)];
+    }
+}
+
+- (NSArray<NSDictionary *> *)capturedMediaStreams {
+    return [self.mutableCapturedMediaStreams copy];
+}
+
+- (NSDictionary *)preferredCapturedMediaStream {
+    NSArray<NSDictionary *> *entries = self.mutableCapturedMediaStreams;
+    for (NSDictionary *entry in entries.reverseObjectEnumerator) {
+        if ([entry[@"kind"] isEqualToString:@"element"]) {
+            return entry;
+        }
+    }
+
+    // hls.js requests the master playlist and then its variant playlists right after it, so the
+    // first manifest of the most recent burst is the one to hand to AVPlayer.
+    NSDictionary *burstStart = nil;
+    for (NSDictionary *entry in entries.reverseObjectEnumerator) {
+        if (![entry[@"kind"] isEqualToString:@"manifest"]) {
+            continue;
+        }
+        if (burstStart != nil && [burstStart[@"date"] timeIntervalSinceDate:entry[@"date"]] > kBrowserCapturedManifestBurstInterval) {
+            break;
+        }
+        burstStart = entry;
+    }
+    if (burstStart != nil) {
+        return burstStart;
+    }
+
+    for (NSDictionary *entry in entries.reverseObjectEnumerator) {
+        if ([entry[@"kind"] isEqualToString:@"progressive"]) {
+            return entry;
+        }
+    }
+    return nil;
 }
 
 - (void)layoutSubviews {
@@ -893,6 +1179,11 @@ static void BrowserInstallYouTubeCaptureUserScript(id configuration) {
     if ([self.delegate respondsToSelector:@selector(webViewDidStartLoad:)]) {
         [self.delegate webViewDidStartLoad:self];
     }
+}
+
+- (void)webView:(id)webView didCommitNavigation:(id)navigation {
+    // Only fires for new main-frame documents, so hash changes and pushState keep their captures.
+    [self.mutableCapturedMediaStreams removeAllObjects];
 }
 
 - (void)webView:(id)webView didFinishNavigation:(id)navigation {

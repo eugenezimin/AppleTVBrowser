@@ -18,6 +18,20 @@ static UIImage *BrowserPointerCursor(void) {
     return image;
 }
 
+// Pointer acceleration: slow, small finger movements are scaled down for precise aiming, while
+// fast swipes keep full speed so the cursor can still cross the screen quickly.
+static CGFloat const kBrowserCursorMinimumSpeedScale = 0.2;
+static CGFloat const kBrowserCursorMaximumSpeedScale = 0.5;
+static CGFloat const kBrowserCursorSlowMovementDistance = 4.0;
+static CGFloat const kBrowserCursorFastMovementDistance = 30.0;
+
+static CGFloat BrowserCursorSpeedScale(CGFloat movementDistance) {
+    CGFloat progress = (movementDistance - kBrowserCursorSlowMovementDistance) /
+        (kBrowserCursorFastMovementDistance - kBrowserCursorSlowMovementDistance);
+    progress = MIN(MAX(progress, 0.0), 1.0);
+    return kBrowserCursorMinimumSpeedScale + (kBrowserCursorMaximumSpeedScale - kBrowserCursorMinimumSpeedScale) * progress;
+}
+
 static NSString *BrowserPressTypeString(UIPressType type) {
     switch (type) {
         case UIPressTypeMenu: return @"Menu";
@@ -415,16 +429,14 @@ static NSString *BrowserPressPhaseString(UIPressPhase phase) {
         if (self.lastTouchLocation.x == -1 && self.lastTouchLocation.y == -1) {
             self.lastTouchLocation = location;
         } else {
-            CGFloat xDiff = location.x - self.lastTouchLocation.x;
-            CGFloat yDiff = location.y - self.lastTouchLocation.y;
+            CGFloat speedScale = BrowserCursorSpeedScale(hypot(location.x - self.lastTouchLocation.x,
+                                                               location.y - self.lastTouchLocation.y));
+            CGFloat xDiff = (location.x - self.lastTouchLocation.x) * speedScale;
+            CGFloat yDiff = (location.y - self.lastTouchLocation.y) * speedScale;
             CGRect rect = self.cursorView.frame;
 
-            if (rect.origin.x + xDiff >= 0 && rect.origin.x + xDiff <= 1920) {
-                rect.origin.x += xDiff;
-            }
-            if (rect.origin.y + yDiff >= 0 && rect.origin.y + yDiff <= 1080) {
-                rect.origin.y += yDiff;
-            }
+            rect.origin.x = MIN(MAX(rect.origin.x + xDiff, 0.0), 1920.0);
+            rect.origin.y = MIN(MAX(rect.origin.y + yDiff, 0.0), 1080.0);
             self.cursorView.frame = rect;
             self.lastTouchLocation = location;
         }

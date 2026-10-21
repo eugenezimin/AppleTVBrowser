@@ -88,7 +88,7 @@ static NSString *BrowserPressPhaseString(UIPressPhase phase) {
         _cursorModeEnabled = YES;
 
         _cursorView = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, 64, 64)];
-        _cursorView.center = CGPointMake(CGRectGetMidX([UIScreen mainScreen].bounds), CGRectGetMidY([UIScreen mainScreen].bounds));
+        _cursorView.center = CGPointMake(CGRectGetMidX(rootView.bounds), CGRectGetMidY(rootView.bounds));
         _cursorView.image = BrowserDefaultCursor();
 
         _playPauseDoubleTapRecognizer = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handlePlayPauseDoubleTap:)];

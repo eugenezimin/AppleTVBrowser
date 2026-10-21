@@ -4,11 +4,7 @@
 #import "BrowserWebView.h"
 
 static UIColor *MenuTextColor(void) {
-    if (@available(tvOS 13, *)) {
-        return UIColor.labelColor;
-    } else {
-        return UIColor.blackColor;
-    }
+    return UIColor.labelColor;
 }
 
 static NSString * const kBrowserMediaDiagnosticsLogPrefix = @"[MediaDiagnostics]";
@@ -82,22 +78,10 @@ typedef void (^BrowserAdvancedMenuItemHandler)(void);
 @property (nonatomic) CGFloat panelWidth;
 @property (nonatomic) BOOL didAnimateIn;
 @property (nonatomic) BOOL dismissalInProgress;
-@property (nonatomic) BOOL usingNativeGlassEffect;
 
 @end
 
 @implementation BrowserAdvancedMenuViewController
-
-- (UIVisualEffect *)panelEffect {
-    Class glassEffectClass = NSClassFromString(@"UIGlassEffect");
-    if (glassEffectClass != Nil) {
-        id effect = [[glassEffectClass alloc] init];
-        if ([effect isKindOfClass:[UIVisualEffect class]]) {
-            return (UIVisualEffect *)effect;
-        }
-    }
-    return [UIBlurEffect effectWithStyle:UIBlurEffectStyleLight];
-}
 
 - (instancetype)initWithTitle:(NSString *)title
                      sections:(NSArray<BrowserAdvancedMenuSection *> *)sections
@@ -117,53 +101,34 @@ typedef void (^BrowserAdvancedMenuItemHandler)(void);
     [super viewDidLoad];
     self.view.backgroundColor = UIColor.clearColor;
 
-    self.panelWidth = MIN(MAX(CGRectGetWidth(UIScreen.mainScreen.bounds) * 0.38, 480.0), 700.0);
-    self.usingNativeGlassEffect = (NSClassFromString(@"UIGlassEffect") != Nil);
+    self.panelWidth = MIN(MAX(CGRectGetWidth(self.view.bounds) * 0.38, 480.0), 700.0);
 
     UIView *dimView = [UIView new];
     dimView.translatesAutoresizingMaskIntoConstraints = NO;
-    dimView.backgroundColor = self.usingNativeGlassEffect ? UIColor.clearColor : [UIColor colorWithWhite:0.0 alpha:0.45];
+    dimView.backgroundColor = UIColor.clearColor;
     dimView.alpha = 0.0;
     [self.view addSubview:dimView];
     self.dimView = dimView;
 
-    UIVisualEffectView *panelView = [[UIVisualEffectView alloc] initWithEffect:[self panelEffect]];
+    UIVisualEffectView *panelView = [[UIVisualEffectView alloc] initWithEffect:[UIGlassEffect new]];
     panelView.translatesAutoresizingMaskIntoConstraints = NO;
     panelView.backgroundColor = UIColor.clearColor;
     panelView.layer.cornerRadius = 28.0;
     panelView.layer.masksToBounds = YES;
-    panelView.layer.borderWidth = self.usingNativeGlassEffect ? 0.0 : 1.0;
-    panelView.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.28].CGColor;
     [self.view addSubview:panelView];
     self.panelView = panelView;
-
-    UIView *panelTint = nil;
-    if (!self.usingNativeGlassEffect) {
-        panelTint = [UIView new];
-        panelTint.translatesAutoresizingMaskIntoConstraints = NO;
-        panelTint.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.08];
-        [panelView.contentView addSubview:panelTint];
-    }
 
     UILabel *titleLabel = [UILabel new];
     titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
     titleLabel.text = self.menuTitle;
     titleLabel.font = [UIFont boldSystemFontOfSize:34.0];
     titleLabel.textAlignment = NSTextAlignmentLeft;
-    if (@available(tvOS 13.0, *)) {
-        titleLabel.textColor = UIColor.labelColor;
-    } else {
-        titleLabel.textColor = UIColor.whiteColor;
-    }
+    titleLabel.textColor = UIColor.labelColor;
     [panelView.contentView addSubview:titleLabel];
 
     UIView *separator = [UIView new];
     separator.translatesAutoresizingMaskIntoConstraints = NO;
-    if (@available(tvOS 13.0, *)) {
-        separator.backgroundColor = UIColor.separatorColor;
-    } else {
-        separator.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.2];
-    }
+    separator.backgroundColor = UIColor.separatorColor;
     [panelView.contentView addSubview:separator];
 
     UILabel *footerLabel = [UILabel new];
@@ -171,11 +136,7 @@ typedef void (^BrowserAdvancedMenuItemHandler)(void);
     footerLabel.text = self.footerText;
     footerLabel.textAlignment = NSTextAlignmentCenter;
     footerLabel.font = [UIFont systemFontOfSize:20.0 weight:UIFontWeightRegular];
-    if (@available(tvOS 13.0, *)) {
-        footerLabel.textColor = UIColor.secondaryLabelColor;
-    } else {
-        footerLabel.textColor = [UIColor colorWithWhite:1.0 alpha:0.7];
-    }
+    footerLabel.textColor = UIColor.secondaryLabelColor;
     [panelView.contentView addSubview:footerLabel];
 
     UITableView *tableView = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStylePlain];
@@ -186,20 +147,16 @@ typedef void (^BrowserAdvancedMenuItemHandler)(void);
     tableView.backgroundColor = UIColor.clearColor;
     tableView.preservesSuperviewLayoutMargins = NO;
     tableView.layoutMargins = UIEdgeInsetsZero;
-    if (@available(tvOS 11.0, *)) {
-        tableView.directionalLayoutMargins = NSDirectionalEdgeInsetsZero;
-        tableView.insetsLayoutMarginsFromSafeArea = NO;
-    }
+    tableView.directionalLayoutMargins = NSDirectionalEdgeInsetsZero;
+    tableView.insetsLayoutMarginsFromSafeArea = NO;
     tableView.cellLayoutMarginsFollowReadableWidth = NO;
     tableView.clipsToBounds = NO;
     tableView.layer.cornerRadius = 0.0;
     tableView.remembersLastFocusedIndexPath = YES;
     tableView.contentInset = UIEdgeInsetsZero;
     tableView.showsVerticalScrollIndicator = NO;
-    if (@available(tvOS 11.0, *)) {
-        tableView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
-        tableView.insetsContentViewsToSafeArea = NO;
-    }
+    tableView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
+    tableView.insetsContentViewsToSafeArea = NO;
     [panelView.contentView addSubview:tableView];
     self.tableView = tableView;
 
@@ -235,12 +192,6 @@ typedef void (^BrowserAdvancedMenuItemHandler)(void);
         [footerLabel.trailingAnchor constraintEqualToAnchor:panelView.trailingAnchor constant:-24.0],
         [footerLabel.bottomAnchor constraintEqualToAnchor:panelView.bottomAnchor constant:-12.0],
     ]];
-    if (panelTint != nil) {
-        [constraints addObject:[panelTint.leadingAnchor constraintEqualToAnchor:panelView.contentView.leadingAnchor]];
-        [constraints addObject:[panelTint.trailingAnchor constraintEqualToAnchor:panelView.contentView.trailingAnchor]];
-        [constraints addObject:[panelTint.topAnchor constraintEqualToAnchor:panelView.contentView.topAnchor]];
-        [constraints addObject:[panelTint.bottomAnchor constraintEqualToAnchor:panelView.contentView.bottomAnchor]];
-    }
     [NSLayoutConstraint activateConstraints:constraints];
 }
 
@@ -375,10 +326,8 @@ typedef void (^BrowserAdvancedMenuItemHandler)(void);
     UIColor *titleColor = nil;
     if (item.style == UIAlertActionStyleDestructive) {
         titleColor = UIColor.redColor;
-    } else if (@available(tvOS 13.0, *)) {
-        titleColor = UIColor.labelColor;
     } else {
-        titleColor = UIColor.whiteColor;
+        titleColor = UIColor.labelColor;
     }
     titleLabel.textColor = titleColor;
     focusBackgroundView.alpha = cell.isFocused ? 1.0 : 0.0;

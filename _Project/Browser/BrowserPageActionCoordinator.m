@@ -6,11 +6,7 @@
 #import "BrowserWebView.h"
 
 static UIColor *BrowserPageActionTextColor(void) {
-    if (@available(tvOS 13, *)) {
-        return UIColor.labelColor;
-    } else {
-        return UIColor.blackColor;
-    }
+    return UIColor.labelColor;
 }
 
 @interface BrowserPageActionCoordinator ()

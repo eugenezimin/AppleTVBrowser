@@ -32,6 +32,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (instancetype)initWithUserAgent:(NSString * _Nullable)userAgent
       allowsInlineMediaPlayback:(BOOL)allowsInlineMediaPlayback NS_DESIGNATED_INITIALIZER;
+- (instancetype)initWithCoder:(NSCoder *)coder NS_DESIGNATED_INITIALIZER;
 
 - (void)loadRequest:(NSURLRequest * _Nullable)request;
 - (void)reload;

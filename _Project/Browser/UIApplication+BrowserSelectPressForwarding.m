@@ -72,14 +72,19 @@ static UIViewController *BrowserFindViewControllerOfClass(UIViewController *view
 }
 
 static UIViewController *BrowserFindPresentedNativeVideoPlayerViewController(UIApplication *application, Class nativeVideoPlayerClass) {
-    for (UIWindow *window in application.windows) {
-        if (window.hidden || window.rootViewController == nil) {
+    for (UIScene *scene in application.connectedScenes) {
+        if (![scene isKindOfClass:[UIWindowScene class]]) {
             continue;
         }
+        for (UIWindow *window in ((UIWindowScene *)scene).windows) {
+            if (window.hidden || window.rootViewController == nil) {
+                continue;
+            }
 
-        UIViewController *match = BrowserFindViewControllerOfClass(window.rootViewController, nativeVideoPlayerClass);
-        if (match != nil) {
-            return match;
+            UIViewController *match = BrowserFindViewControllerOfClass(window.rootViewController, nativeVideoPlayerClass);
+            if (match != nil) {
+                return match;
+            }
         }
     }
     return nil;

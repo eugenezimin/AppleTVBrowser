@@ -37,7 +37,8 @@ static NSString * const kWKProofOfConceptURLString = @"https://youtube.com";
     self.detailLabel.numberOfLines = 0;
     [self.view addSubview:self.detailLabel];
 
-    self.activityIndicatorView = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleWhiteLarge];
+    self.activityIndicatorView = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleLarge];
+    self.activityIndicatorView.color = UIColor.whiteColor;
     self.activityIndicatorView.translatesAutoresizingMaskIntoConstraints = NO;
     self.activityIndicatorView.hidesWhenStopped = YES;
     [self.activityIndicatorView startAnimating];
